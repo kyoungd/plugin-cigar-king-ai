@@ -24,33 +24,29 @@ if (!in_array('woocommerce/woocommerce.php', apply_filters('active_plugins', get
 
 // Include the settings class
 require_once plugin_dir_path(__FILE__) . 'includes/class-cigar-king-ai-settings.php';
+require_once plugin_dir_path(__FILE__) . 'includes/class-cigar-king-ai-chatbox-renderer.php';
 
 class Cigar_King_AI_Recommender {
-    private $api_url;
-    private $api_key;
-    private $settings;
 
     public function __construct() {
-        // Initialize settings immediately
         $this->settings = new Cigar_King_AI_Settings();
-
-        // Hook init() to the 'init' action
         add_action('init', array($this, 'init'));
+
+        // AJAX action hooks
+        add_action('wp_ajax_send_ai_message', array($this, 'send_ai_message'));
+        add_action('wp_ajax_nopriv_send_ai_message', array($this, 'send_ai_message'));
+        add_action('wp_ajax_cigar_ai_initial_call', array($this, 'handle_initial_call'));
+        add_action('wp_ajax_nopriv_cigar_ai_initial_call', array($this, 'handle_initial_call'));
     }
 
     public function init() {
-        error_log('Cigar_King_AI_Recommender init method called');
-
         $options = get_option('cigar_king_ai_options');
         $this->api_url = isset($options['api_url']) ? $options['api_url'] : '';
         $this->api_key = isset($options['api_key']) ? $options['api_key'] : '';
 
-        // Directly register the shortcode
         $this->register_shortcodes();
 
         add_action('wp_enqueue_scripts', array($this, 'enqueue_scripts'));
-        add_action('wp_ajax_send_ai_message', array($this, 'send_ai_message'));
-        add_action('wp_ajax_nopriv_send_ai_message', array($this, 'send_ai_message'));
     }
 
     public function enqueue_scripts() {
@@ -58,36 +54,30 @@ class Cigar_King_AI_Recommender {
         wp_enqueue_script('cigar-ai-script', plugin_dir_url(__FILE__) . 'js/cigar-ai-script.js', array('jquery'), '1.0', true);
         wp_localize_script('cigar-ai-script', 'cigar_ai_ajax', array(
             'ajax_url' => admin_url('admin-ajax.php'),
-            'nonce' => wp_create_nonce('cigar_ai_nonce')
+            'nonce' => wp_create_nonce('cigar_ai_nonce'),
+            'api_key' => $this->api_key
         ));
     }
 
     public function register_shortcodes() {
-        error_log('Cigar_King_AI_Recommender register_shortcodes method called');
         add_shortcode('cigar_ai_chatbox', array($this, 'render_chatbox'));
     }
 
     public function render_chatbox() {
-        ob_start();
-        ?>
-        <div id="cigar-ai-chatbox">
-            <div id="cigar-ai-messages"></div>
-            <div id="cigar-ai-input">
-                <input type="text" id="cigar-ai-user-input" placeholder="Ask about cigars...">
-                <button id="cigar-ai-send">Send</button>
-            </div>
-        </div>
-        <div id="cigar-ai-recommendations"></div>
-        <?php
-        return ob_get_clean();
+        return Cigar_King_AI_Chatbox_Renderer::render();
     }
 
-    public function send_ai_message() {
+    public function handle_initial_call() {
         check_ajax_referer('cigar_ai_nonce', 'nonce');
 
-        $user_message = sanitize_text_field($_POST['message']);
+        $initial_data = array(
+            'subscription_external_id' => sanitize_text_field($_POST['subscription_external_id']),
+            'timeZone' => sanitize_text_field($_POST['timeZone']),
+            'caller' => new stdClass(),  // Empty object instead of an empty array
+            'caller_domain' => sanitize_text_field($_POST['caller_domain'])
+        );
 
-        $response = $this->call_ai_api($user_message);
+        $response = $this->call_ai_api_initial($initial_data);
 
         if (is_wp_error($response)) {
             wp_send_json_error($response->get_error_message());
@@ -95,27 +85,58 @@ class Cigar_King_AI_Recommender {
 
         $ai_response = json_decode($response['body'], true);
 
-        if (isset($ai_response['data']['is_new_recommendation']) && $ai_response['data']['is_new_recommendation']) {
-            $recommendations = $this->get_product_recommendations($ai_response['data']['recommendations']);
-            wp_send_json_success(array(
-                'message' => $ai_response['message'],
-                'recommendations' => $recommendations
-            ));
-        } else {
-            wp_send_json_success(array('message' => $ai_response['message']));
+        if (isset($ai_response['error'])) {
+            wp_send_json_error($ai_response['error']);
         }
+
+        wp_send_json_success($ai_response);
     }
 
-    private function call_ai_api($message) {
+    public function send_ai_message() {
+        check_ajax_referer('cigar_ai_nonce', 'nonce');
+
+        $user_message = sanitize_text_field($_POST['message']);
+        $initial_data = isset($_POST['data']) ? $_POST['data'] : array();
+
+        $response = $this->call_ai_api($user_message, $initial_data);
+
+        if (is_wp_error($response)) {
+            wp_send_json_error($response->get_error_message());
+        }
+
+        $ai_response = json_decode($response['body'], true);
+
+        if (isset($ai_response['error'])) {
+            wp_send_json_error($ai_response['error']);
+        }
+
+        wp_send_json_success($ai_response);
+    }
+
+    private function call_ai_api_initial($initial_data) {
+        if (empty($this->api_url) || empty($this->api_key)) {
+            return new WP_Error('api_error', 'API URL or Key is not set. Please configure the plugin settings.');
+        }
+
+        $body = json_encode($initial_data);
+
+        return wp_remote_post($this->api_url, array(
+            'headers' => array(
+                'Content-Type' => 'application/json',
+                'Authorization' => 'Bearer ' . $this->api_key
+            ),
+            'body' => $body,
+            'timeout' => 15
+        ));
+    }
+
+    private function call_ai_api($message, $initial_data) {
         if (empty($this->api_url) || empty($this->api_key)) {
             return new WP_Error('api_error', 'API URL or Key is not set. Please configure the plugin settings.');
         }
 
         $body = json_encode(array(
-            'subscription_external_id' => 'cigar-king',
-            'timeZone' => 'America/Los_Angeles',
-            'caller' => array(),
-            'caller_domain' => '',
+            'data' => $initial_data,
             'message' => $message
         ));
 
