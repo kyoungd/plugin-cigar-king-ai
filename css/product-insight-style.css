@@ -1,0 +1,91 @@
+#cigar-ai-chatbox {
+    max-width: 100%;
+    margin: 0 auto;
+    font-size: 16px;
+    display: flex;
+    flex-direction: column;
+}
+
+#cigar-ai-input {
+    display: flex;
+    padding: 10px;
+    background-color: #fff;
+}
+
+#cigar-ai-user-input {
+    flex-grow: 1;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 3px;
+    font-size: 1em;
+}
+
+#cigar-ai-last-reply-container {
+    padding: 15px;
+    min-height: 100px;
+    overflow-y: auto;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+}
+
+.ai-message {
+    background-color: #f0f0f0;
+    padding: 10px;
+    border-radius: 5px;
+    width: 100%;
+    word-wrap: break-word;
+}
+
+#cigar-ai-user-input:disabled {
+    background-color: #f5f5f5;
+    cursor: not-allowed;
+}
+
+#cigar-ai-loading {
+    font-style: italic;
+    color: #888;
+    text-align: center;
+    margin-top: 10px;
+}
+
+/* Progress bar styles */
+.progress-bar {
+    width: 100%;
+    height: 20px;
+    background-color: #f0f0f0;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.progress {
+    width: 0;
+    height: 100%;
+    background-color: #4CAF50;
+    animation: progress-animation 2s infinite linear;
+}
+
+@keyframes progress-animation {
+    0% {
+        width: 0;
+    }
+    50% {
+        width: 100%;
+    }
+    100% {
+        width: 0;
+    }
+}
+
+/* Responsive adjustments */
+@media screen and (max-width: 768px) {
+    /* Your existing responsive styles */
+}
+
+@media screen and (max-width: 480px) {
+    #cigar-ai-user-input {
+        margin-bottom: 0;
+    }
+    /* Other existing responsive styles */
+}
+

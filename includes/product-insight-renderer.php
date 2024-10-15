@@ -1,22 +1,23 @@
 <?php
-// File: includes/class-cigar-king-ai-chatbox-renderer.php
+// File: includes/product-insight-renderer.php
 
 if (!defined('ABSPATH')) {
     exit; // Exit if accessed directly
 }
 
-class Cigar_King_AI_Chatbox_Renderer {
+class Cigar_King_Product_Insight_Renderer {
     public static function render() {
         ob_start();
         ?>
         <div id="cigar-ai-chatbox">
-            <div id="cigar-ai-messages"></div>
             <div id="cigar-ai-input">
-                <input type="text" id="cigar-ai-user-input" placeholder="Ask about cigars...">
+                <input type="text" id="cigar-ai-user-input" placeholder="I am Edward, your Cigar AI. Ask me anything...">
                 <div id="cigar-ai-loading" style="display: none;">Initializing...</div>
             </div>
+            <div id="cigar-ai-last-reply-container" style="display: none;">
+            </div>
+            <div id="cigar-ai-messages" style="display: none;"></div>
         </div>
-        <div id="cigar-ai-recommendations"></div>
         <?php
         return ob_get_clean();
     }
