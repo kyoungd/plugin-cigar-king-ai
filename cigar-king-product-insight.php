@@ -1,5 +1,6 @@
 <?php
 /**
+ * cigar-king-product-insight.php
  * Plugin Name: Cigar King Product Insight
  * Plugin URI: https://example.com/cigar-king-product-insight
  * Description: AI-powered cigar Product Insight for WooCommerce
@@ -25,6 +26,7 @@ if (!in_array('woocommerce/woocommerce.php', apply_filters('active_plugins', get
 // Include the settings class
 require_once plugin_dir_path(__FILE__) . 'includes/product-insight-settings.php';
 require_once plugin_dir_path(__FILE__) . 'includes/product-insight-renderer.php';
+require_once plugin_dir_path(__FILE__) . 'includes/theme-integration.php';
 
 class Cigar_King_Product_Insight {
 
