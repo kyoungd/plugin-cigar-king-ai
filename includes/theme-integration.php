@@ -2,38 +2,20 @@
 class Cigar_King_Product_Insight_Theme_Integration {
     public function __construct() {
         add_action('wp_head', array($this, 'output_custom_styles'));
-        add_action('admin_init', array($this, 'register_style_settings'));
         add_action('switch_theme', array($this, 'clear_theme_color_cache'));
-    }
-
-    public function register_style_settings() {
-        register_setting('cigar_king_product_insight_options', 'ck_custom_css');
-        add_settings_field(
-            'ck_custom_css',
-            __('Custom CSS', 'cigar-king-product-insight'),
-            array($this, 'custom_css_callback'),
-            'cigar_king_product_insight',
-            'cigar_king_product_insight_section'
-        );
-    }
-
-    public function custom_css_callback() {
-        $custom_css = get_option('ck_custom_css', '');
-        echo '<textarea name="ck_custom_css" rows="10" cols="50">' . esc_textarea($custom_css) . '</textarea>';
     }
 
     public function output_custom_styles() {
         $primary_color = $this->get_theme_primary_color();
         $secondary_color = $this->adjust_brightness($primary_color, 30);
-        $custom_css = get_option('ck_custom_css', '');
+        $text_color = $this->get_contrasting_color($primary_color);
         
         echo '<style type="text/css">';
         echo ':root {';
         echo '--ck-primary-color: ' . esc_attr($primary_color) . ';';
         echo '--ck-secondary-color: ' . esc_attr($secondary_color) . ';';
-        echo '--ck-text-color: ' . esc_attr($this->get_contrasting_color($primary_color)) . ';';
+        echo '--ck-text-color: ' . esc_attr($text_color) . ';';
         echo '}';
-        echo esc_html($custom_css);
         echo '</style>';
     }
 
@@ -47,77 +29,88 @@ class Cigar_King_Product_Insight_Theme_Integration {
             return $cached_color;
         }
 
-        $primary_color = '#333333'; // Default fallback color
+        // Default fallback color
+        $primary_color = '#333333';
 
-        // Check if the current theme supports custom colors
-        if (current_theme_supports('custom-colors')) {
-            $theme_color = get_theme_mod('primary_color');
-            if ($theme_color) {
-                $primary_color = $theme_color;
+        // Common theme mod keys for primary color
+        $color_mod_keys = array(
+            'primary_color',
+            'accent_color',
+            'link_color',
+            'header_textcolor',
+            'background_color',
+        );
+
+        foreach ($color_mod_keys as $mod_key) {
+            $theme_mod_color = get_theme_mod($mod_key);
+            if ($theme_mod_color && $this->is_valid_color($theme_mod_color)) {
+                $primary_color = $this->sanitize_hex_color($theme_mod_color);
+                break;
             }
         }
 
-        // If no custom color is set, try to extract color from the theme's stylesheet
-        if ($primary_color === '#333333') {
-            $theme = wp_get_theme();
-            $stylesheet_path = $theme->get_stylesheet_directory() . '/style.css';
-            
-            if (file_exists($stylesheet_path)) {
-                $theme_css = file_get_contents($stylesheet_path);
-                if ($theme_css !== false) {
-                    $color_patterns = array(
-                        'primary-color',
-                        'primary_color',
-                        'main-color',
-                        'main_color',
-                        'theme-color',
-                        'theme_color'
-                    );
-                    
-                    foreach ($color_patterns as $pattern) {
-                        if (preg_match('/' . $pattern . ':\s*(#[a-fA-F0-9]{6})/', $theme_css, $matches)) {
-                            $primary_color = $matches[1];
-                            break;
-                        }
-                    }
-                    
-                    // If still not found, look for any color
-                    if ($primary_color === '#333333') {
-                        preg_match('/#([a-fA-F0-9]{6})/', $theme_css, $matches);
-                        if (!empty($matches)) {
-                            $primary_color = $matches[0];
-                        }
-                    }
+        // Try to get color from theme.json for block themes
+        if (function_exists('wp_get_global_settings')) {
+            $global_settings = wp_get_global_settings(array('color', 'palette'));
+            if (!empty($global_settings['color']['palette']['theme'])) {
+                $theme_palette = $global_settings['color']['palette']['theme'];
+                if (!empty($theme_palette[0]['color'])) {
+                    $primary_color = $this->sanitize_hex_color($theme_palette[0]['color']);
                 }
             }
         }
 
+        // Cache the color for future use
         set_transient('ck_theme_primary_color', $primary_color, DAY_IN_SECONDS);
         return $primary_color;
     }
-    
-    private function adjust_brightness($hex, $steps) {
-        // Convert hex to rgb
-        $rgb = array_map('hexdec', str_split(ltrim($hex, '#'), 2));
-        
-        // Adjust brightness
-        foreach ($rgb as &$color) {
-            $color = max(0, min(255, $color + $steps));
+
+    private function is_valid_color($color) {
+        return preg_match('/^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/', $color);
+    }
+
+    private function sanitize_hex_color($color) {
+        if ($this->is_valid_color($color)) {
+            return $color;
         }
-        
-        // Convert rgb back to hex
-        return '#' . implode('', array_map(function($n) {
-            return str_pad(dechex($n), 2, '0', STR_PAD_LEFT);
-        }, $rgb));
+        return '#333333';
+    }
+
+    private function adjust_brightness($hex, $steps) {
+        $steps = max(-255, min(255, $steps));
+        $hex = str_replace('#', '', $hex);
+
+        if (strlen($hex) === 3) {
+            $hex = $hex[0].$hex[0].$hex[1].$hex[1].$hex[2].$hex[2];
+        }
+
+        $color_parts = str_split($hex, 2);
+        $return = '#';
+
+        foreach ($color_parts as $color) {
+            $color = hexdec($color);
+            $color = max(0, min(255, $color + $steps));
+            $return .= str_pad(dechex($color), 2, '0', STR_PAD_LEFT);
+        }
+
+        return $return;
     }
 
     private function get_contrasting_color($hex) {
-        // Convert hex to rgb
-        $rgb = array_map('hexdec', str_split(ltrim($hex, '#'), 2));
-        
-        // Calculate brightness
-        $brightness = ($rgb[0] * 299 + $rgb[1] * 587 + $rgb[2] * 114) / 1000;
-        
+        $hex = str_replace('#', '', $hex);
+
+        if (strlen($hex) === 3) {
+            $r = hexdec(str_repeat(substr($hex, 0, 1), 2));
+            $g = hexdec(str_repeat(substr($hex, 1, 1), 2));
+            $b = hexdec(str_repeat(substr($hex, 2, 1), 2));
+        } else {
+            $r = hexdec(substr($hex, 0, 2));
+            $g = hexdec(substr($hex, 2, 2));
+            $b = hexdec(substr($hex, 4, 2));
+        }
+
+        $brightness = (($r * 299) + ($g * 587) + ($b * 114)) / 1000;
+
         return $brightness > 128 ? '#000000' : '#FFFFFF';
     }
 }
