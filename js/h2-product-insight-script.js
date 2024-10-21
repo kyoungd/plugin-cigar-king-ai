@@ -4,9 +4,9 @@ jQuery(document).ready(function($) {
         return;
     }
 
-    const lastReplyContainer = $('#cigar-ai-last-reply-container');
-    const inputContainer = $('#cigar-ai-input');
-    let userInput = $('#cigar-ai-user-input');
+    const lastReplyContainer = $('#product-insight-ailast-reply-container');
+    const inputContainer = $('#product-insight-aiinput');
+    let userInput = $('#product-insight-aiuser-input');
     let initialResponse = null;
     let initialCallMade = false;
 
@@ -22,8 +22,8 @@ jQuery(document).ready(function($) {
     }
 
     function hideProgressBar() {
-        inputContainer.html('<input type="text" id="cigar-ai-user-input" placeholder="Ask about cigars...">');
-        userInput = $('#cigar-ai-user-input'); // Reassign the userInput variable
+        inputContainer.html('<input type="text" id="product-insight-aiuser-input" placeholder="Ask about the product...">');
+        userInput = $('#product-insight-aiuser-input'); // Reassign the userInput variable
         attachInputListeners(); // Reattach event listeners
     }
 
@@ -31,21 +31,20 @@ jQuery(document).ready(function($) {
         console.log('makeInitialCall called');
         showProgressBar();
         $.ajax({
-            url: cigar_product_insight_ajax.ajax_url,
+            url: h2_product_insight_ajax.ajax_url,
             type: 'POST',
             data: {
-                action: 'cigar_product_insight_initial_call',
-                nonce: cigar_product_insight_ajax.nonce,
-                subscription_external_id: cigar_product_insight_ajax.api_key,
+                action: 'h2_product_insight_initial_call',
+                nonce: h2_product_insight_ajax.nonce,
+                subscription_external_id: h2_product_insight_ajax.api_key,
                 timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-                caller: {},
-                caller_domain: window.location.hostname,
-                product_id: cigar_product_insight_ajax.product_id  // Add this line
+                product_id: h2_product_insight_ajax.product_id,
+                caller_domain: window.location.hostname // Add this line
             },
             success: function(response) {
                 hideProgressBar();
                 if (response.success) {
-                    initialResponse = response.data;
+                    initialResponse = response.data.data;
                     console.log('Initial call successful:', initialResponse);
                     initialCallMade = true;
                 } else {
@@ -83,19 +82,19 @@ jQuery(document).ready(function($) {
 
     function proceedWithMessage(message) {
         $.ajax({
-            url: cigar_product_insight_ajax.ajax_url,
+            url: h2_product_insight_ajax.ajax_url,
             type: 'POST',
             data: {
                 action: 'send_product_insight_message',
-                nonce: cigar_product_insight_ajax.nonce,
+                nonce: h2_product_insight_ajax.nonce,
                 message: message,
                 data: initialResponse
             },
             success: function(response) {
                 hideProgressBar();
                 if (response.success) {
-                    addMessage(response.data.message, true);
-                    initialResponse = response.data;
+                    initialResponse = response.data.data;
+                    addMessage(initialResponse.message, true);
                 } else {
                     addMessage('Error: ' + response.data, true);
                 }

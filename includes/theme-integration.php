@@ -1,5 +1,5 @@
 <?php
-class Cigar_King_Product_Insight_Theme_Integration {
+class H2_Product_Insight_Theme_Integration {
     public function __construct() {
         add_action('wp_head', array($this, 'output_custom_styles'));
         add_action('switch_theme', array($this, 'clear_theme_color_cache'));
@@ -115,4 +115,4 @@ class Cigar_King_Product_Insight_Theme_Integration {
     }
 }
 
-new Cigar_King_Product_Insight_Theme_Integration();
+new H2_Product_Insight_Theme_Integration();

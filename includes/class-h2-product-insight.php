@@ -1,54 +1,39 @@
 <?php
-/**
- * cigar-king-product-insight.php
- * Plugin Name: Cigar King Product Insight
- * Plugin URI: https://example.com/cigar-king-product-insight
- * Description: AI-powered cigar Product Insight for WooCommerce
- * Version: 1.0
- * Author: Your Name
- * Author URI: https://example.com
- * Text Domain: cigar-king-product-insight
- * Requires at least: 5.0
- * Requires PHP: 7.2
- * WC requires at least: 3.0
- * WC tested up to: 6.0
- */
-
 if (!defined('ABSPATH')) {
     exit; // Exit if accessed directly
 }
 
-// Check if WooCommerce is active
-if (!in_array('woocommerce/woocommerce.php', apply_filters('active_plugins', get_option('active_plugins')))) {
-    return;
-}
+// Include the settings, renderer, and theme integration classes
+require_once plugin_dir_path(__FILE__) . './product-insight-settings.php';
+require_once plugin_dir_path(__FILE__) . './product-insight-renderer.php';
+require_once plugin_dir_path(__FILE__) . './theme-integration.php';
 
-// Include the settings class
-require_once plugin_dir_path(__FILE__) . 'includes/product-insight-settings.php';
-require_once plugin_dir_path(__FILE__) . 'includes/product-insight-renderer.php';
-require_once plugin_dir_path(__FILE__) . 'includes/theme-integration.php';
+class H2_Product_Insight {
 
-class Cigar_King_Product_Insight {
+    private $settings;
+    private $api_url;
+    private $api_key;
 
     public function __construct() {
         // Settings class initialization
-        $this->settings = new Cigar_King_Product_Insight_Settings();
+        $this->settings = new H2_Product_Insight_Settings();
         add_action('init', array($this, 'init'));
 
         // AJAX action hooks
         add_action('wp_ajax_send_product_insight_message', array($this, 'send_product_insight_message'));
         add_action('wp_ajax_nopriv_send_product_insight_message', array($this, 'send_product_insight_message'));
-        add_action('wp_ajax_cigar_product_insight_initial_call', array($this, 'handle_initial_call'));
-        add_action('wp_ajax_nopriv_cigar_product_insight_initial_call', array($this, 'handle_initial_call'));
+        add_action('wp_ajax_h2_product_insight_initial_call', array($this, 'handle_initial_call'));
+        add_action('wp_ajax_nopriv_h2_product_insight_initial_call', array($this, 'handle_initial_call'));
 
-        // Hook to display the chatbox after the "Add to Cart" button
-        // add_action('woocommerce_after_add_to_cart_form', array($this, 'display_chatbox_after_add_to_cart'));
-
+        // Hook to display the chatbox
         add_action('init', array($this, 'add_chatbox_display_hook'));
+
+        // Theme integration
+        new H2_Product_Insight_Theme_Integration();
     }
 
     public function init() {
-        $options = get_option('cigar_king_product_insight_options');
+        $options = get_option('h2_product_insight_options');
         $this->api_url = isset($options['api_url']) ? $options['api_url'] : '';
         $this->api_key = isset($options['api_key']) ? $options['api_key'] : '';
 
@@ -58,18 +43,29 @@ class Cigar_King_Product_Insight {
 
     public function enqueue_scripts() {
         // Enqueue the CSS and JS scripts
-        wp_enqueue_style('product-insight-style', plugin_dir_url(__FILE__) . 'css/product-insight-style.css', array(), '1.0');
-        wp_enqueue_script('cigar-product-insight-script', plugin_dir_url(__FILE__) . 'js/cigar-product-insight-script.js', array('jquery'), '1.0', true);
-        wp_localize_script('cigar-product-insight-script', 'cigar_product_insight_ajax', array(
-            'ajax_url' => admin_url('admin-ajax.php'),
-            'nonce' => wp_create_nonce('cigar_product_insight_nonce'),
-            'api_key' => $this->api_key,
-            'product_id' => get_the_ID()  // Add this line
+        wp_enqueue_style(
+            'product-insight-style',
+            plugin_dir_url(__FILE__) . '../css/product-insight-style.css',
+            array(),
+            '1.0'
+        );
+        wp_enqueue_script(
+            'h2-product-insight-script',
+            plugin_dir_url(__FILE__) . '../js/h2-product-insight-script.js',
+            array('jquery'),
+            '1.0',
+            true
+        );
+        wp_localize_script('h2-product-insight-script', 'h2_product_insight_ajax', array(
+            'ajax_url'   => admin_url('admin-ajax.php'),
+            'nonce'      => wp_create_nonce('h2_product_insight_nonce'),
+            'api_key'    => $this->api_key,
+            'product_id' => get_the_ID()
         ));
     }
 
     public function add_chatbox_display_hook() {
-        $options = get_option('cigar_king_product_insight_options');
+        $options   = get_option('h2_product_insight_options');
         $placement = isset($options['chatbox_placement']) ? $options['chatbox_placement'] : 'after_add_to_cart';
 
         switch ($placement) {
@@ -103,37 +99,40 @@ class Cigar_King_Product_Insight {
 
     public function add_product_insight_tab($tabs) {
         $tabs['product_insight'] = array(
-            'title'     => __('Product Insight', 'cigar-king-product-insight'),
-            'priority'  => 50,
-            'callback'  => array($this, 'display_chatbox')
+            'title'    => __('Product Insight', 'h2-product-insight'),
+            'priority' => 50,
+            'callback' => array($this, 'display_chatbox')
         );
         return $tabs;
     }
 
     public function render_chatbox() {
         // Render the chatbox using the renderer class
-        return Cigar_King_Product_Insight_Renderer::render();
+        return H2_Product_Insight_Renderer::render();
     }
 
     public function handle_initial_call() {
-        check_ajax_referer('cigar_product_insight_nonce', 'nonce');
+        check_ajax_referer('h2_product_insight_nonce', 'nonce');
+
+        // Use the domain passed from JavaScript
+        $caller_domain = isset($_POST['caller_domain']) ? sanitize_text_field($_POST['caller_domain']) : '';
 
         $initial_data = array(
             'subscription_external_id' => sanitize_text_field($_POST['subscription_external_id']),
-            'timeZone' => sanitize_text_field($_POST['timeZone']),
-            'caller' => new stdClass(),
-            'caller_domain' => sanitize_text_field($_POST['caller_domain'])
+            'timeZone'                 => sanitize_text_field($_POST['timeZone']),
+            'caller'                   => new stdClass(),
+            'caller_domain'            => $caller_domain
         );
 
         // Get the product ID from the AJAX request
         $product_id = isset($_POST['product_id']) ? intval($_POST['product_id']) : 0;
 
         $product_description = '';
-        $product_title = '';
+        $product_title       = '';
         if ($product_id) {
             $product = wc_get_product($product_id);
             if ($product) {
-                $product_title = $product->get_name();
+                $product_title       = $this->get_product_title($product);
                 $product_description = $this->get_product_full_description($product);
             }
         }
@@ -142,44 +141,24 @@ class Cigar_King_Product_Insight {
 
         if (is_wp_error($response)) {
             wp_send_json_error($response->get_error_message());
+            return;
         }
-
-        $ai_response = json_decode($response['body'], true);
-
-        if (isset($ai_response['error'])) {
-            wp_send_json_error($ai_response['error']);
+    
+        $ai_response = json_decode($response['body'], false);
+    
+        if (!$ai_response || !isset($ai_response->success) || $ai_response->success !== true) {
+            $error_message = isset($ai_response->message) ? $ai_response->message : 'Unknown error occurred';
+            wp_send_json_error($error_message);
+            return;
         }
-
-        $ai_response['product_title'] = $product_title;
-        $ai_response['product_description'] = $product_description;
+    
+        $ai_response->data->product_title = $product_title;
+        $ai_response->data->product_description = $product_description;
         wp_send_json_success($ai_response);
     }
 
-    private function get_product_full_description($product) {
-        $short_description = $product->get_short_description();
-        $description = $product->get_description();
-        $reviews = $this->get_product_reviews($product->get_id());
-
-        return implode("\n", array_filter([$short_description, $description, $reviews]));
-    }
-
-    private function get_product_reviews($product_id) {
-        $args = array(
-            'post_id' => $product_id,
-            'status' => 'approve',
-        );
-        $reviews = get_comments($args);
-        $review_texts = array();
-
-        foreach ($reviews as $review) {
-            $review_texts[] = $review->comment_content;
-        }
-
-        return implode("\n", $review_texts);
-    }
-    
     public function send_product_insight_message() {
-        check_ajax_referer('cigar_product_insight_nonce', 'nonce');
+        check_ajax_referer('h2_product_insight_nonce', 'nonce');
 
         $user_message = sanitize_text_field($_POST['message']);
         $initial_data = isset($_POST['data']) ? $_POST['data'] : array();
@@ -188,14 +167,17 @@ class Cigar_King_Product_Insight {
 
         if (is_wp_error($response)) {
             wp_send_json_error($response->get_error_message());
+            return;
         }
-
-        $ai_response = json_decode($response['body'], true);
-
-        if (isset($ai_response['error'])) {
-            wp_send_json_error($ai_response['error']);
+    
+        $ai_response = json_decode($response['body'], false);
+    
+        if (!$ai_response || !isset($ai_response->success) || $ai_response->success !== true) {
+            $error_message = isset($ai_response->message) ? $ai_response->message : 'Unknown error occurred';
+            wp_send_json_error($error_message);
+            return;
         }
-
+    
         wp_send_json_success($ai_response);
     }
 
@@ -208,10 +190,10 @@ class Cigar_King_Product_Insight {
 
         return wp_remote_post($this->api_url, array(
             'headers' => array(
-                'Content-Type' => 'application/json',
+                'Content-Type'  => 'application/json',
                 'Authorization' => 'Bearer ' . $this->api_key
             ),
-            'body' => $body,
+            'body'    => $body,
             'timeout' => 15
         ));
     }
@@ -222,32 +204,44 @@ class Cigar_King_Product_Insight {
         }
 
         $body = json_encode(array(
-            'data' => $initial_data,
+            'data'    => $initial_data,
             'message' => $message
         ));
 
         return wp_remote_post($this->api_url, array(
             'headers' => array(
-                'Content-Type' => 'application/json',
+                'Content-Type'  => 'application/json',
                 'Authorization' => 'Bearer ' . $this->api_key
             ),
-            'body' => $body,
+            'body'    => $body,
             'timeout' => 15
         ));
     }
-}
 
-// Initialize the plugin
-function cigar_king_product_insight_init() {
-    new Cigar_King_Product_Insight();
-}
-add_action('plugins_loaded', 'cigar_king_product_insight_init');
+    private function get_product_title($product) {
+        return $product->get_name();
+    }
 
-// Add a "Settings" link to the plugin action links
-add_filter('plugin_action_links_' . plugin_basename(__FILE__), 'cigar_king_product_insight_plugin_action_links');
+    private function get_product_full_description($product) {
+        $short_description = $product->get_short_description();
+        $description       = $product->get_description();
+        $reviews           = $this->get_product_reviews($product->get_id());
 
-function cigar_king_product_insight_plugin_action_links($links) {
-    $settings_link = '<a href="' . admin_url('options-general.php?page=cigar_king_product_insight') . '">' . __('Settings', 'cigar-king-product-insight') . '</a>';
-    array_unshift($links, $settings_link);
-    return $links;
+        return implode("\n", array_filter([$short_description, $description, $reviews]));
+    }
+
+    private function get_product_reviews($product_id) {
+        $args    = array(
+            'post_id' => $product_id,
+            'status'  => 'approve',
+        );
+        $reviews = get_comments($args);
+        $texts   = array();
+
+        foreach ($reviews as $review) {
+            $texts[] = $review->comment_content;
+        }
+
+        return implode("\n", $texts);
+    }
 }
